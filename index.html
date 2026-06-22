@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AGENT LEVEL UP</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --bg: #0a0a2e;
+  --bg2: #12123a;
+  --orange: #ff6b35;
+  --cyan: #00e5ff;
+  --green: #00ff41;
+  --red: #ff0040;
+  --yellow: #ffd700;
+  --white: #e8e8e8;
+  --dim: #8a8aba;
+  --pixel: 'Press Start 2P', monospace;
+  --body: -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+
+html { font-size: 16px; }
+
+body {
+  font-family: var(--body);
+  background: var(--bg);
+  color: var(--white);
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: none;
+  image-rendering: pixelated;
+}
+
+/* ===== Scanline overlay ===== */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0,0,0,0.06) 0px,
+    rgba(0,0,0,0.06) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ===== Pixel border mixin ===== */
+.pixel-box {
+  border: 4px solid var(--cyan);
+  box-shadow:
+    inset 0 0 0 2px var(--bg),
+    0 0 0 2px var(--bg),
+    4px 4px 0 0 rgba(0,229,255,0.2);
+  background: var(--bg2);
+}
+
+/* ===== Screens ===== */
+.screen {
+  display: none;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 24px 16px;
+  padding-bottom: env(safe-area-inset-bottom, 24px);
+  animation: screenIn 0.3s ease;
+}
+.screen.active { display: flex; flex-direction: column; }
+
+@keyframes screenIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ===== XP Bar (top) ===== */
+.xp-wrap {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  background: var(--bg);
+  padding: 8px 16px 6px;
+  display: none;
+}
+.xp-wrap.show { display: block; }
+.xp-label {
+  font-family: var(--pixel);
+  font-size: 10px;
+  color: var(--yellow);
+  margin-bottom: 4px;
+  letter-spacing: 1px;
+}
+.xp-track {
+  height: 10px;
+  background: #1a1a4a;
+  border: 2px solid var(--dim);
+  position: relative;
+}
+.xp-fill {
+  height: 100%;
+  background: var(--yellow);
+  transition: width 0.6s steps(10);
+  width: 0%;
+  box-shadow: 0 0 8px rgba(255,215,0,0.4);
+}
+.xp-text {
+  font-family: var(--pixel);
+  font-size: 9px;
+  color: var(--dim);
+  margin-top: 3px;
+  text-align: right;
+}
+
+/* ===== START screen ===== */
+#start {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 20px;
+}
+.title-art {
+  font-family: var(--pixel);
+  font-size: 12px;
+  color: var(--cyan);
+  line-height: 1.6;
+  letter-spacing: 2px;
+  white-space: pre;
+}
+.start-title {
+  font-family: var(--body);
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.6;
+  color: var(--orange);
+  text-shadow: 2px 2px 0 #8b3a1a;
+}
+.start-sub {
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--dim);
+  max-width: 340px;
+}
+.start-hint {
+  font-family: var(--pixel);
+  font-size: 11px;
+  color: var(--cyan);
+  animation: blink 1.2s steps(2) infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.start-footer {
+  font-family: var(--pixel);
+  font-size: 9px;
+  color: #4a4a6a;
+  line-height: 2.2;
+  margin-top: 16px;
+}
+
+.pixel-btn {
+  display: inline-block;
+  padding: 16px 36px;
+  font-family: var(--pixel);
+  font-size: 14px;
+  color: #000;
+  background: var(--orange);
+  border: none;
+  cursor: pointer;
+  box-shadow:
+    4px 4px 0 #8b3a1a,
+    inset -2px -2px 0 #cc5020,
+    inset 2px 2px 0 #ff9060;
+  transition: transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.pixel-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow:
+    2px 2px 0 #8b3a1a,
+    inset -2px -2px 0 #cc5020,
+    inset 2px 2px 0 #ff9060;
+}
+
+/* ===== LEVEL UP overlay ===== */
+.levelup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 200;
+  flex-direction: column;
+  gap: 16px;
+  animation: screenIn 0.2s;
+}
+.levelup-overlay.show { display: flex; }
+.levelup-text {
+  font-family: var(--pixel);
+  font-size: 24px;
+  color: var(--yellow);
+  text-shadow: 0 0 20px rgba(255,215,0,0.6);
+  animation: levelPulse 0.6s ease infinite alternate;
+}
+@keyframes levelPulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.1); }
+}
+.levelup-num {
+  font-family: var(--pixel);
+  font-size: 56px;
+  color: var(--orange);
+  text-shadow: 3px 3px 0 #8b3a1a, 0 0 30px rgba(255,107,53,0.5);
+}
+.levelup-desc {
+  font-family: var(--body);
+  font-size: 15px;
+  color: var(--cyan);
+}
+
+/* ===== GAME screen ===== */
+#game { padding-top: 56px; gap: 12px; }
+
+.stage-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.stage-day {
+  font-family: var(--pixel);
+  font-size: 11px;
+  color: var(--cyan);
+  letter-spacing: 1px;
+}
+.stage-level {
+  font-family: var(--pixel);
+  font-size: 10px;
+  color: var(--yellow);
+  background: rgba(255,215,0,0.1);
+  padding: 4px 10px;
+  border: 1px solid var(--yellow);
+}
+
+.q-title {
+  font-family: var(--body);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: var(--orange);
+  margin-bottom: 8px;
+}
+.q-context {
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--dim);
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--dim);
+  background: rgba(90,90,138,0.08);
+}
+
+/* ===== Options ===== */
+.opts { display: flex; flex-direction: column; gap: 10px; }
+
+.opt {
+  padding: 14px 14px;
+  border: 3px solid var(--dim);
+  background: var(--bg2);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+.opt::before {
+  content: '';
+  position: absolute;
+  top: -1px; left: -1px; right: -1px; bottom: -1px;
+  border: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.opt:active { transform: translate(1px,1px); }
+.opt .opt-label {
+  font-family: var(--body);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--white);
+  margin-bottom: 6px;
+}
+.opt .opt-desc {
+  font-family: var(--body);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--dim);
+}
+
+.opt.correct {
+  border-color: var(--green);
+  background: rgba(0,255,65,0.08);
+}
+.opt.correct .opt-label { color: var(--green); }
+.opt.correct::before { border-color: rgba(0,255,65,0.3); }
+
+.opt.wrong {
+  border-color: var(--red);
+  background: rgba(255,0,64,0.08);
+}
+.opt.wrong .opt-label { color: var(--red); }
+
+.opt.locked { pointer-events: none; opacity: 0.6; }
+
+/* ===== Feedback ===== */
+.fb {
+  font-family: var(--body);
+  margin-top: 14px;
+  padding: 14px 16px;
+  font-size: 14px;
+  line-height: 1.8;
+  display: none;
+  animation: screenIn 0.3s;
+}
+.fb.show { display: block; }
+.fb.good {
+  color: var(--green);
+  border-left: 3px solid var(--green);
+  background: rgba(0,255,65,0.05);
+}
+.fb.ok {
+  color: var(--yellow);
+  border-left: 3px solid var(--yellow);
+  background: rgba(255,215,0,0.05);
+}
+.fb.bad {
+  color: var(--red);
+  border-left: 3px solid var(--red);
+  background: rgba(255,0,64,0.05);
+}
+
+.next-wrap {
+  margin-top: 16px;
+  display: none;
+  text-align: right;
+}
+.next-wrap.show { display: block; }
+
+/* ===== RESULT screen ===== */
+#result {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+}
+.result-badge {
+  width: 100px; height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  border: 4px solid;
+  position: relative;
+}
+.result-badge::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border: 2px solid;
+  opacity: 0.3;
+}
+.result-num {
+  font-family: var(--pixel);
+  font-size: 44px;
+  line-height: 1;
+}
+.result-lbl {
+  font-family: var(--pixel);
+  font-size: 10px;
+  margin-top: 6px;
+  opacity: 0.7;
+}
+.result-title-text {
+  font-family: var(--body);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.6;
+  color: var(--orange);
+}
+.result-desc-text {
+  font-family: var(--body);
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--dim);
+  max-width: 360px;
+}
+
+.breakdown {
+  width: 100%;
+  max-width: 360px;
+  text-align: left;
+  margin: 8px 0;
+}
+.breakdown-head {
+  font-family: var(--pixel);
+  font-size: 11px;
+  color: var(--dim);
+  margin-bottom: 10px;
+  letter-spacing: 1px;
+}
+.bd-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #1a1a3a;
+  font-family: var(--pixel);
+  font-size: 10px;
+  line-height: 1.8;
+}
+.bd-dot {
+  width: 8px; height: 8px;
+  flex-shrink: 0;
+}
+.bd-dot.g { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.bd-dot.y { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+.bd-dot.r { background: var(--red); box-shadow: 0 0 6px var(--red); }
+
+.btn-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
+.pixel-btn-sm {
+  display: inline-block;
+  padding: 14px 24px;
+  font-family: var(--pixel);
+  font-size: 11px;
+  color: var(--cyan);
+  background: transparent;
+  border: 2px solid var(--cyan);
+  cursor: pointer;
+  letter-spacing: 1px;
+  -webkit-tap-highlight-color: transparent;
+}
+.pixel-btn-sm:active {
+  background: rgba(0,229,255,0.1);
+}
+
+.result-footer {
+  font-family: var(--pixel);
+  font-size: 9px;
+  color: #4a4a6a;
+  line-height: 2.2;
+  margin-top: 20px;
+}
+
+/* ===== Stars decoration ===== */
+.star {
+  position: fixed;
+  width: 2px; height: 2px;
+  background: #fff;
+  border-radius: 0;
+  animation: twinkle 3s ease-in-out infinite;
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.8; }
+}
+
+/* ===== Mobile helpers ===== */
+@media (max-width: 380px) {
+  .start-title { font-size: 20px; }
+  .q-title { font-size: 16px; }
+  .opt .opt-label { font-size: 14px; }
+  .pixel-btn { padding: 14px 28px; font-size: 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Stars background -->
+<div id="stars"></div>
+
+<!-- XP Bar -->
+<div class="xp-wrap" id="xpWrap">
+  <div class="xp-label">EXP</div>
+  <div class="xp-track"><div class="xp-fill" id="xpFill"></div></div>
+  <div class="xp-text" id="xpText">STAGE 0/5</div>
+</div>
+
+<!-- Level Up Overlay -->
+<div class="levelup-overlay" id="levelup">
+  <div class="levelup-text">LEVEL UP!</div>
+  <div class="levelup-num" id="levelupNum"></div>
+  <div class="levelup-desc" id="levelupDesc"></div>
+</div>
+
+<!-- ===== START ===== -->
+<div class="screen active" id="start">
+  <div class="title-art">- - - AGENT - - -</div>
+  <h1 class="start-title">你的 AI AGENT<br>是什么 LEVEL?</h1>
+  <p class="start-sub">5 个真实场景<br>测出你对 AI Agent 的判断力</p>
+  <button class="pixel-btn" onclick="startGame()">START</button>
+  <p class="start-hint">PRESS START</p>
+  <p class="start-footer">Based on Google x Kaggle<br>5-Day AI Agents Vibe Coding Course</p>
+</div>
+
+<!-- ===== GAME ===== -->
+<div class="screen" id="game">
+  <div class="stage-info">
+    <span class="stage-day" id="dayTag"></span>
+    <span class="stage-level" id="levelTag"></span>
+  </div>
+  <h2 class="q-title" id="qTitle"></h2>
+  <div class="q-context" id="qContext"></div>
+  <div class="opts" id="optsWrap"></div>
+  <div class="fb" id="fb"></div>
+  <div class="next-wrap" id="nextWrap">
+    <button class="pixel-btn" id="nextBtn" onclick="nextQ()">NEXT >></button>
+  </div>
+</div>
+
+<!-- ===== RESULT ===== -->
+<div class="screen" id="result">
+  <div class="result-badge" id="resBadge">
+    <span class="result-num" id="resNum"></span>
+    <span class="result-lbl">LEVEL</span>
+  </div>
+  <h2 class="result-title-text" id="resTitle"></h2>
+  <p class="result-desc-text" id="resDesc"></p>
+  <div class="breakdown" id="bd"></div>
+  <div class="btn-row">
+    <button class="pixel-btn" onclick="startGame()">RETRY</button>
+    <button class="pixel-btn-sm" onclick="openCourse()">COURSE >></button>
+  </div>
+  <p class="result-footer">
+    半个造物主·乘百<br>
+    Google x Kaggle 5-Day AI Agents
+  </p>
+</div>
+
+<script>
+// --- Stars ---
+(function(){
+  var c = document.getElementById('stars');
+  for(var i=0;i<40;i++){
+    var s = document.createElement('div');
+    s.className='star';
+    s.style.left = Math.random()*100+'%';
+    s.style.top = Math.random()*100+'%';
+    s.style.animationDelay = Math.random()*4+'s';
+    s.style.width = s.style.height = (Math.random()>0.7?'3px':'2px');
+    c.appendChild(s);
+  }
+})();
+
+// --- Questions ---
+var questions = [
+  {
+    day: 'DAY 1 · 新SDLC',
+    level: 'LEVEL 0 → 1',
+    title: '你想造一个内部工具。怎么开始？',
+    context: '老板说下周要一个员工请假审批系统。你手头有AI编程工具。',
+    options: [
+      {
+        label: 'A. 打开ChatGPT，说“帮我写一个请假系统”',
+        desc: '拿到代码直接用',
+        score: 0,
+        feedback: '这是Level 0——纯对话。AI写的代码能跑，但没有验收标准、没有安全边界、没有测试。你只是在用一个聊天机器人。'
+      },
+      {
+        label: 'B. 先写清楚需求文档，再让AI执行',
+        desc: '定义好输入输出和边界条件',
+        score: 1,
+        feedback: '方向对了。你开始定义“做什么”而不是直接让AI猜。但这还停在单次任务层面。'
+      },
+      {
+        label: 'C. 先定评估标准和约束条件，搭好框架，让Agent在框架内自主执行',
+        desc: '你当厂长，Agent当工人',
+        score: 2,
+        feedback: '这就是课程说的“工厂模型”。你从写代码的人变成编排Agent的人——定规则、定边界、定验收标准。这是新SDLC的核心转变。'
+      }
+    ]
+  },
+  {
+    day: 'DAY 2 · 工具设计',
+    level: 'LEVEL 1 → 2',
+    title: '你给Agent接了一个日历工具。怎么写工具描述？',
+    context: '你的Agent需要帮用户订会议室。你要写一份工具说明，让Agent知道怎么用这个工具。',
+    options: [
+      {
+        label: 'A. 工具名：calendar_api',
+        desc: '把API接口文档贴进去，15个参数全列出来',
+        score: 0,
+        feedback: 'Agent看到15个参数会迷路。工具名“calendar_api”没有任何语义，AI只能猜你要干什么。这是裸API思维。'
+      },
+      {
+        label: 'B. 工具名：book_meeting_room',
+        desc: '描述：“根据参会人数和时间，预订合适的会议室”',
+        score: 2,
+        feedback: '这就是课程的工具设计铁律：描述任务，别描述实现。工具名自带语义，描述说的是“要达成什么”而不是“怎么调函数”。工具设计本质上就是写PRD。'
+      },
+      {
+        label: 'C. 工具名：update_calendar',
+        desc: '描述：“更新日历”',
+        score: 1,
+        feedback: '比裸API好一点，但“更新日历”太模糊——是订会议室？取消会议？查空闲时段？Agent会猜错。好的工具描述应该像好的需求文档：明确、具体、不留歧义。'
+      }
+    ]
+  },
+  {
+    day: 'DAY 3 · AGENT SKILLS',
+    level: 'LEVEL 2 → 3',
+    title: '你的Agent要同时处理客服、数据分析、代码审查三类任务。怎么设计？',
+    context: '你给Agent塞了所有场景的指令，系统提示词已经超过1万字。Agent开始答非所问，早期的指令经常被忽略。',
+    options: [
+      {
+        label: 'A. 继续加指令，写得更详细',
+        desc: '把每个场景的规则都写透',
+        score: 0,
+        feedback: '这只会加速“上下文腐烂”（Context Rot）——指令越多，早期信息越容易被淹没。你在让一个人同时背三本操作手册，他只会更混乱。'
+      },
+      {
+        label: 'B. 建三个独立的Agent，各管各的',
+        desc: '客服Agent、分析Agent、审查Agent',
+        score: 1,
+        feedback: '能解决问题，但维护成本高——三套系统、三套更新、三套监控。而且很多能力是通用的（比如读数据库），每个Agent都要重复配置。'
+      },
+      {
+        label: 'C. 拆成三个Skill目录，一个Agent按需加载',
+        desc: '平时轻装上阵，需要某个技能时才加载对应的SKILL.md',
+        score: 2,
+        feedback: '这就是课程教的Agent Skills架构：渐进式加载。Agent平时只带轻量级提示词，需要某个角色时加载对应的Skill，用完卸载。一个Agent灵活切换几百个专家角色，而不撑爆上下文。这就是AI版的组织架构设计。'
+      }
+    ]
+  },
+  {
+    day: 'DAY 4 · 安全与评估',
+    level: 'LEVEL 3 → 4',
+    title: 'Agent帮你生成了一段代码，里面引用了一个你没见过的开源包。怎么处理？',
+    context: '你的Agent推荐安装 google-auth-utils 这个包。代码能跑，测试也过了。',
+    options: [
+      {
+        label: 'A. 直接安装，AI推荐的应该靠谱',
+        desc: '测试都过了，没理由不信',
+        score: 0,
+        feedback: '这可能是“Slopsquatting”——AI幻觉出一个不存在的包名，攻击者提前注册了这个名字并塞入恶意代码。Vibe Coding时代你大概率不会逐行审查依赖，这正是攻击者赌的。'
+      },
+      {
+        label: 'B. 先验证这个包是否真实存在，查发布者和下载量',
+        desc: '不信AI的推荐，自己核实',
+        score: 2,
+        feedback: '正确。课程专门讲了Slopsquatting风险——AI会幻觉出不存在的包名。验证包的真实性是最基本的安全动作。课程还建议用临时沙箱（Ephemeral Sandboxing）执行所有代码，跑完就销毁，不碰真实环境。'
+      },
+      {
+        label: 'C. 让另一个AI检查一下这段代码',
+        desc: 'AI互相审查应该能发现问题',
+        score: 1,
+        feedback: '比盲目信任好，但AI审查AI有已知偏差——互相奉承、偏好更长更自信的回答。课程建议的做法是：Red/Blue/Green三方对抗（红队攻击、蓝队防守、绿队审计），加上人类做最终判断。'
+      }
+    ]
+  },
+  {
+    day: 'DAY 5 · 原型→生产',
+    level: 'LEVEL 4 · 生产就绪',
+    title: 'Agent写的代码全部跑通了。可以上线吗？',
+    context: '功能完整，测试通过，Demo也很流畅。老板很满意，催你今天就上线。',
+    options: [
+      {
+        label: 'A. 测试过了就上，速度优先',
+        desc: 'MVP嘛，先上再迭代',
+        score: 0,
+        feedback: '课程说了一句狠话：Agent可以用错误的推理得到正确的答案。测试过了不代表过程是对的——API密钥可能硬编码了、密码可能明文存储、输入没有过滤。结果对了过程错了，早晚出事。'
+      },
+      {
+        label: 'B. 补上安全扫描和代码审查再上',
+        desc: '加一轮人工review',
+        score: 1,
+        feedback: '比直接上好。但课程说本地门控只是习惯养成，用户可以绕过。真正的安全屏障应该在远端CI/CD——不可绕过的自动化流水线。'
+      },
+      {
+        label: 'C. 先用Gherkin规范定义行为标准，再跑自动化安全流水线',
+        desc: '代码是可丢弃的，规范才是源代码',
+        score: 2,
+        feedback: '这就是Spec-Driven Development的核心：代码是可丢弃的，行为驱动的Gherkin规范才是真正的源代码。在Vibe Coding时代，代码随时可以让Agent重新生成，但“系统应该做什么、不该做什么”的规范才是你真正需要保护的资产。'
+      }
+    ]
+  }
+];
+
+var current = 0;
+var scores = [];
+var answered = false;
+
+var levelNames = [
+  '聊天机器人用户',
+  '工具调用者',
+  '流程设计者',
+  '系统编排者',
+  '生产级架构师'
+];
+
+function startGame() {
+  current = 0;
+  scores = [];
+  answered = false;
+  show('game');
+  document.getElementById('xpWrap').classList.add('show');
+  renderQ();
+}
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+  var el = document.getElementById(id);
+  el.classList.remove('active');
+  void el.offsetWidth;
+  el.classList.add('active');
+  if (id === 'start' || id === 'result') {
+    document.getElementById('xpWrap').classList.remove('show');
+  }
+}
+
+function renderQ() {
+  answered = false;
+  var q = questions[current];
+  document.getElementById('dayTag').textContent = q.day;
+  document.getElementById('levelTag').textContent = q.level;
+  document.getElementById('qTitle').textContent = q.title;
+  document.getElementById('qContext').textContent = q.context;
+  document.getElementById('xpFill').style.width = (current / questions.length * 100) + '%';
+  document.getElementById('xpText').textContent = 'STAGE ' + (current+1) + '/' + questions.length;
+
+  var wrap = document.getElementById('optsWrap');
+  wrap.innerHTML = '';
+  q.options.forEach(function(opt, i) {
+    var d = document.createElement('div');
+    d.className = 'opt';
+    d.innerHTML = '<div class="opt-label">' + opt.label + '</div><div class="opt-desc">' + opt.desc + '</div>';
+    d.onclick = function(){ pickOpt(i); };
+    wrap.appendChild(d);
+  });
+
+  document.getElementById('fb').className = 'fb';
+  document.getElementById('fb').style.display = 'none';
+  document.getElementById('nextWrap').classList.remove('show');
+  window.scrollTo(0, 0);
+}
+
+function pickOpt(idx) {
+  if (answered) return;
+  answered = true;
+
+  var q = questions[current];
+  var opt = q.options[idx];
+  scores.push({ day: q.day, score: opt.score });
+
+  var opts = document.querySelectorAll('.opt');
+  opts.forEach(function(el, i) {
+    if (q.options[i].score === 2) el.classList.add('correct');
+    else if (i === idx && opt.score < 2) el.classList.add('wrong');
+    el.classList.add('locked');
+  });
+
+  var fb = document.getElementById('fb');
+  fb.textContent = opt.feedback;
+  fb.className = 'fb show ' + (opt.score === 2 ? 'good' : opt.score === 1 ? 'ok' : 'bad');
+  fb.style.display = 'block';
+
+  var btn = document.getElementById('nextBtn');
+  btn.textContent = current < questions.length - 1 ? 'NEXT >>' : 'RESULT >>';
+  document.getElementById('nextWrap').classList.add('show');
+
+  // Scroll to feedback
+  setTimeout(function(){ fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 100);
+}
+
+function nextQ() {
+  current++;
+  if (current >= questions.length) {
+    showResult();
+    return;
+  }
+
+  // Level up animation
+  var overlay = document.getElementById('levelup');
+  document.getElementById('levelupNum').textContent = current;
+  document.getElementById('levelupDesc').textContent = levelNames[current] || '';
+  overlay.classList.add('show');
+
+  setTimeout(function() {
+    overlay.classList.remove('show');
+    renderQ();
+  }, 1200);
+}
+
+function showResult() {
+  var total = scores.reduce(function(s, x){ return s + x.score; }, 0);
+
+  var level, title, desc, clr;
+  if (total <= 2) {
+    level=0; title='聊天机器人用户';
+    desc='你还在用AI对话，没有让它成为你的执行者。好消息是：从Level 0到Level 2，只差一个“先定标准再动手”的意识转变。';
+    clr='var(--red)';
+  } else if (total <= 4) {
+    level=1; title='工具调用者';
+    desc='你开始给AI接工具了，但还停在单次任务层面。下一步：学会定义评估标准和约束条件，让Agent在框架内自主决策。';
+    clr='var(--yellow)';
+  } else if (total <= 6) {
+    level=2; title='流程设计者';
+    desc='你已经会定义规则让Agent执行了。下一步：学会拆技能、做安全评估——从“能用”到“敢用”。';
+    clr='var(--orange)';
+  } else if (total <= 8) {
+    level=3; title='系统编排者';
+    desc='你理解Agent协作、技能管理和安全边界。只差最后一步：从原型到生产的Spec-Driven思维。';
+    clr='var(--cyan)';
+  } else {
+    level=4; title='生产级架构师';
+    desc='你对AI Agent的理解已经到了生产级。你知道代码是可丢弃的，规范才是源代码。判断力，才是你和99%的人之间的差距。';
+    clr='var(--green)';
+  }
+
+  var badge = document.getElementById('resBadge');
+  badge.style.borderColor = clr;
+  badge.style.color = clr;
+  badge.querySelector('::after') ;
+  badge.style.setProperty('--badge-clr', clr);
+  document.getElementById('resNum').textContent = level;
+  document.getElementById('resNum').style.color = clr;
+  document.getElementById('resTitle').textContent = title;
+  document.getElementById('resDesc').textContent = desc;
+
+  document.getElementById('xpFill').style.width = '100%';
+
+  // Breakdown
+  var bd = document.getElementById('bd');
+  bd.innerHTML = '<div class="breakdown-head">STAGE REVIEW</div>';
+  scores.forEach(function(s, i) {
+    var dc = s.score === 2 ? 'g' : s.score === 1 ? 'y' : 'r';
+    var lb = s.score === 2 ? 'PERFECT' : s.score === 1 ? 'OK' : 'MISS';
+    bd.innerHTML += '<div class="bd-item"><span class="bd-dot ' + dc + '"></span><span>' + questions[i].day + ' : ' + lb + '</span></div>';
+  });
+
+  show('result');
+}
+
+function openCourse() {
+  window.open('https://www.kaggle.com/competitions/5-day-ai-agents-intensive-vibecoding-course-with-google/discussion', '_blank');
+}
+</script>
+</body>
+</html>
